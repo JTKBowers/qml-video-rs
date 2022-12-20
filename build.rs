@@ -158,7 +158,8 @@ fn main() {
 }
 
 fn download_and_extract(url: &str, check: &str) -> Result<PathBuf, std::io::Error> {
-    let mdk_sdk_root = PathBuf::from(&env::var("OUT_DIR").unwrap());
+    let mdk_sdk_root =
+        PathBuf::from(&env::var("MDK_SDK_ROOT").unwrap_or(env::var("OUT_DIR").unwrap()));
 
     if mdk_sdk_root.join(check).exists() {
         return Ok(mdk_sdk_root);
