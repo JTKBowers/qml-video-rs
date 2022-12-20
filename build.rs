@@ -78,20 +78,12 @@ fn main() {
             println!("cargo:rustc-link-lib=framework=mdk");
             config.flag_if_supported("-fobjc-arc");
             config.flag("-x").flag("objective-c++");
-            let _ = Command::new("mkdir")
-                .args(&[&format!(
-                    "{}/../../../../Frameworks",
-                    env::var("OUT_DIR").unwrap()
-                )])
-                .status();
-            Command::new("cp")
-                .args(&[
-                    "-af",
-                    path.join("lib/mdk.framework").to_str().unwrap(),
-                    &format!("{}/../../../../Frameworks/", env::var("OUT_DIR").unwrap()),
-                ])
-                .status()
-                .unwrap();
+            let frameworks_dir =
+                PathBuf::from(env::var("OUT_DIR").unwrap()).join("../../../../Frameworks");
+            if !frameworks_dir.exists() {
+                std::fs::create_dir(&frameworks_dir).unwrap();
+            }
+            std::fs::copy(path.join("lib/mdk.framework"), &frameworks_dir).unwrap();
         } else {
             println!("cargo:rustc-link-search={}{}", path.display(), entry.1);
             println!("cargo:rustc-link-lib=mdk");
