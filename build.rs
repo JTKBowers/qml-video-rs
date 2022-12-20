@@ -1,17 +1,20 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
+use std::path::PathBuf;
 use std::process::Command;
-use std::path::Path;
 
 fn main() {
     let qt_include_path = env::var("DEP_QT_INCLUDE_PATH").unwrap();
     let qt_library_path = env::var("DEP_QT_LIBRARY_PATH").unwrap();
-    let qt_version      = env::var("DEP_QT_VERSION").unwrap();
+    let qt_version = env::var("DEP_QT_VERSION").unwrap();
 
     let mut config = cpp_build::Config::new();
 
-    for f in std::env::var("DEP_QT_COMPILE_FLAGS").unwrap().split_terminator(";") {
+    for f in std::env::var("DEP_QT_COMPILE_FLAGS")
+        .unwrap()
+        .split_terminator(";")
+    {
         config.flag(f);
     }
 
@@ -28,11 +31,21 @@ fn main() {
 
     let mut private_include = |name| {
         if cfg!(target_os = "macos") {
-            config.include(format!("{}/{}.framework/Headers/{}",       qt_library_path, name, qt_version));
-            config.include(format!("{}/{}.framework/Headers/{}/{}",    qt_library_path, name, qt_version, name));
+            config.include(format!(
+                "{}/{}.framework/Headers/{}",
+                qt_library_path, name, qt_version
+            ));
+            config.include(format!(
+                "{}/{}.framework/Headers/{}/{}",
+                qt_library_path, name, qt_version, name
+            ));
         }
-        config.include(format!("{}/{}/{}",    qt_include_path, name, qt_version))
-              .include(format!("{}/{}/{}/{}", qt_include_path, name, qt_version, name));
+        config
+            .include(format!("{}/{}/{}", qt_include_path, name, qt_version))
+            .include(format!(
+                "{}/{}/{}/{}",
+                qt_include_path, name, qt_version, name
+            ));
     };
     private_include("QtCore");
     private_include("QtGui");
@@ -57,32 +70,78 @@ fn main() {
 
     if let Ok(path) = download_and_extract(&entry.0, &format!("{}{}", entry.1, entry.2)) {
         if target_os == "macos" || target_os == "ios" {
-            println!("cargo:rustc-link-search=framework={}{}", path, "lib/");
+            println!(
+                "cargo:rustc-link-search=framework={}{}",
+                path.display(),
+                "lib/"
+            );
             println!("cargo:rustc-link-lib=framework=mdk");
             config.flag_if_supported("-fobjc-arc");
             config.flag("-x").flag("objective-c++");
-            let _ = Command::new("mkdir").args(&[&format!("{}/../../../../Frameworks", env::var("OUT_DIR").unwrap())]).status();
-            Command::new("cp").args(&["-af", &format!("{}/lib/mdk.framework", path), &format!("{}/../../../../Frameworks/", env::var("OUT_DIR").unwrap())]).status().unwrap();
+            let _ = Command::new("mkdir")
+                .args(&[&format!(
+                    "{}/../../../../Frameworks",
+                    env::var("OUT_DIR").unwrap()
+                )])
+                .status();
+            Command::new("cp")
+                .args(&[
+                    "-af",
+                    path.join("lib/mdk.framework").to_str().unwrap(),
+                    &format!("{}/../../../../Frameworks/", env::var("OUT_DIR").unwrap()),
+                ])
+                .status()
+                .unwrap();
         } else {
-            println!("cargo:rustc-link-search={}{}", path, entry.1);
+            println!("cargo:rustc-link-search={}{}", path.display(), entry.1);
             println!("cargo:rustc-link-lib=mdk");
         }
         if target_os == "windows" {
-            std::fs::copy(format!("{}/bin/x64/mdk.dll", path), format!("{}/../../../mdk.dll", env::var("OUT_DIR").unwrap())).unwrap();
-            std::fs::copy(format!("{}/bin/x64/ffmpeg-5.dll", path), format!("{}/../../../ffmpeg-5.dll", env::var("OUT_DIR").unwrap())).unwrap();
-            let _ = std::fs::copy(format!("{}/bin/x64/mdk-braw.dll", path), format!("{}/../../../mdk-braw.dll", env::var("OUT_DIR").unwrap()));
+            std::fs::copy(
+                path.join("bin/x64/mdk.dll"),
+                format!("{}/../../../mdk.dll", env::var("OUT_DIR").unwrap()),
+            )
+            .unwrap();
+            std::fs::copy(
+                path.join("bin/x64/ffmpeg-5.dll"),
+                format!("{}/../../../ffmpeg-5.dll", env::var("OUT_DIR").unwrap()),
+            )
+            .unwrap();
+            let _ = std::fs::copy(
+                path.join("bin/x64/mdk-braw.dll"),
+                format!("{}/../../../mdk-braw.dll", env::var("OUT_DIR").unwrap()),
+            );
         }
         if target_os == "android" {
-            std::fs::copy(format!("{}/lib/arm64-v8a/libmdk.so", path), format!("{}/../../../libmdk.so", env::var("OUT_DIR").unwrap())).unwrap();
-            std::fs::copy(format!("{}/lib/arm64-v8a/libffmpeg.so", path), format!("{}/../../../libffmpeg.so", env::var("OUT_DIR").unwrap())).unwrap();
+            std::fs::copy(
+                path.join("lib/arm64-v8a/libmdk.so"),
+                format!("{}/../../../libmdk.so", env::var("OUT_DIR").unwrap()),
+            )
+            .unwrap();
+            std::fs::copy(
+                path.join("lib/arm64-v8a/libffmpeg.so"),
+                format!("{}/../../../libffmpeg.so", env::var("OUT_DIR").unwrap()),
+            )
+            .unwrap();
             // std::fs::copy(format!("{}/lib/arm64-v8a/libqtav-mediacodec.so", path), format!("{}/../../../libqtav-mediacodec.so", env::var("OUT_DIR").unwrap())).unwrap();
         }
         if target_os == "linux" {
-            std::fs::copy(format!("{}/lib/amd64/libffmpeg.so.5", path), format!("{}/../../../libffmpeg.so.5", env::var("OUT_DIR").unwrap())).unwrap();
-            std::fs::copy(format!("{}/lib/amd64/libmdk.so.0", path), format!("{}/../../../libmdk.so.0", env::var("OUT_DIR").unwrap())).unwrap();
-            let _ = std::fs::copy(format!("{}/lib/amd64/libmdk-braw.so", path), format!("{}/../../../libmdk-braw.so", env::var("OUT_DIR").unwrap()));
+            std::fs::copy(
+                path.join("lib/amd64/libffmpeg.so.5"),
+                format!("{}/../../../libffmpeg.so.5", env::var("OUT_DIR").unwrap()),
+            )
+            .unwrap();
+            std::fs::copy(
+                path.join("lib/amd64/libmdk.so.0"),
+                format!("{}/../../../libmdk.so.0", env::var("OUT_DIR").unwrap()),
+            )
+            .unwrap();
+            let _ = std::fs::copy(
+                path.join("lib/amd64/libmdk-braw.so"),
+                format!("{}/../../../libmdk-braw.so", env::var("OUT_DIR").unwrap()),
+            );
         }
-        config.include(format!("{}{}", path, entry.3));
+        config.include(path.join(entry.3));
     } else {
         panic!("Unable to download or extract mdk-sdk. Please make sure you have 7z in PATH or download mdk manually from https://sourceforge.net/projects/mdk-sdk/ and extract to {}", env::var("OUT_DIR").unwrap());
     }
@@ -95,33 +154,51 @@ fn main() {
         }
     }
 
-    config
-        .include(&qt_include_path)
-        .build("src/lib.rs");
-
+    config.include(&qt_include_path).build("src/lib.rs");
 }
 
-fn download_and_extract(url: &str, check: &str) -> Result<String, std::io::Error> {
-    let out_dir = env::var("OUT_DIR").unwrap();
-    if !Path::new(&format!("{}/mdk-sdk/{}", out_dir, check)).exists() {
-        let ext = if url.contains(".tar.xz") { ".tar.xz" } else { ".7z" };
-        {
-            let mut reader = ureq::get(url).call().map_err(|_| std::io::ErrorKind::Other)?.into_reader();
-            let mut file = File::create(format!("{}/mdk-sdk{}", out_dir, ext))?;
-            std::io::copy(&mut reader, &mut file)?;
-        }
-        Command::new("7z").current_dir(&out_dir).args(&["x", "-y", &format!("mdk-sdk{}", ext)]).status()?;
-        std::fs::remove_file(format!("{}/mdk-sdk{}", out_dir, ext))?;
-        if ext == ".tar.xz" {
-            let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-            if target_os == "macos" || target_os == "ios" || target_os == "linux" {
-                Command::new("tar").current_dir(&out_dir).args(&["-xf", "mdk-sdk.tar"]).status()?;
-            } else {
-                Command::new("7z").current_dir(&out_dir).args(&["x", "-y", "mdk-sdk.tar"]).status()?;
-            }
-            std::fs::remove_file(format!("{}/mdk-sdk.tar", out_dir))?;
-        }
+fn download_and_extract(url: &str, check: &str) -> Result<PathBuf, std::io::Error> {
+    let mdk_sdk_root = PathBuf::from(&env::var("OUT_DIR").unwrap());
+
+    if mdk_sdk_root.join(check).exists() {
+        return Ok(mdk_sdk_root);
     }
 
-    Ok(format!("{}/mdk-sdk/", out_dir))
+    let ext = if url.contains(".tar.xz") {
+        ".tar.xz"
+    } else {
+        ".7z"
+    };
+    let archive_path = mdk_sdk_root.join(format!("mdk-sdk{}", ext));
+    {
+        let mut reader = ureq::get(url)
+            .call()
+            .map_err(|_| std::io::ErrorKind::Other)?
+            .into_reader();
+        let mut file = File::create(archive_path.clone())?;
+        std::io::copy(&mut reader, &mut file)?;
+    }
+    Command::new("7z")
+        .current_dir(&mdk_sdk_root)
+        .args(&["x", "-y", archive_path.to_str().unwrap()])
+        .status()?;
+    std::fs::remove_file(archive_path)?;
+
+    if ext == ".tar.xz" {
+        let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+        if target_os == "macos" || target_os == "ios" || target_os == "linux" {
+            Command::new("tar")
+                .current_dir(&mdk_sdk_root)
+                .args(&["-xf", "mdk-sdk.tar"])
+                .status()?;
+        } else {
+            Command::new("7z")
+                .current_dir(&mdk_sdk_root)
+                .args(&["x", "-y", "mdk-sdk.tar"])
+                .status()?;
+        }
+        std::fs::remove_file(mdk_sdk_root.join("mdk-sdk.tar"))?;
+    }
+
+    Ok(mdk_sdk_root)
 }
